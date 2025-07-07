@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Value potential for Bread line 5 and 7</title>
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script type="module">
+    import * as Icons from 'https://cdn.skypack.dev/lucide-react';
+    window.Icons = Icons;
+  </script>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // "Red Earth" color scheme
+            redClay: '#B7410E',      // Primary dark color, for headers
+            redSand: '#F7C566',      // Primary accent color
+            redEarth: '#EAD8C0',     // Background tone
+            brandWhite: '#FCF8F3',    // Card and surface background
+            // Conditional colors for result cards
+            positiveGreenText: '#22543D',
+            positiveGreenBg: '#F0FFF4',
+            negativeRedText: '#B7410E', // Using redClay for consistency
+            negativeRedBg: '#FFF5F5',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gradient-to-b from-brandWhite to-redEarth/60 text-black font-sans">
+  <div id="root" class="min-h-screen"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+    // Dynamically load all icons from the window object
+    const { Clock, DollarSign, Package, ChevronsRight, ArrowUp, Zap, ShieldCheck, Award, Wheat, Leaf, TrendingUp, Sparkles, FlaskConical, BarChartHorizontal, CheckCircle, ShoppingCart, Repeat, Percent, Store, Users, Calendar, Minus, Plus, ArrowRight } = window.Icons || {};
+
+    // --- DATA CONSTANTS ---
+    const COLORS = { 
+        redClay: '#B7410E', 
+        redSand: '#F7C566', 
+        brandWhite: '#FCF8F3',
+        positiveGreenText: '#22543D',
+        positiveGreenBg: '#F0FFF4',
+        negativeRedText: '#B7410E',
+        negativeRedBg: '#FFF5F5',
+    };
+    const defaultProcessSteps = [
+      { id: 1, name: 'High-Shear Mixing', time: 4, improvable: false },
+      { id: 2, name: 'Dividing & Moulding', time: 3, improvable: false },
+      { id: 3, name: 'Intermediate Proof', time: 7, improvable: true },
+      { id: 4, name: 'Final Proof', time: 48, improvable: true },
+      { id: 5, name: 'Baking', time: 21, improvable: false },
+      { id: 6, name: 'Cooling', time: 105, improvable: false },
+      { id: 7, name: 'Slicing & Bagging', time: 5, improvable: false },
+      { id: 8, name: 'QA & Palletising', time: 5, improvable: false },
+    ];
+    const qualityImprovementsData = {
+      acrylamide: { label: 'Acrylamide Reduction', icon: <ShieldCheck className="w-6 h-6"/> },
+      appearance: { label: 'Appealing Appearance', icon: <Sparkles className="w-6 h-6"/> },
+      freshness: { label: 'Extended Freshness', icon: <Clock className="w-6 h-6"/> },
+      wholewheat: { label: 'Better Wholewheat/High-Fiber', icon: <Wheat className="w-6 h-6"/> },
+      pulses: { label: 'Incorporate Pulses & Legumes', icon: <Leaf className="w-6 h-6"/> },
+    };
+    const yieldImprovementsData = {
+      fasterFermentation: { label: 'Faster Fermentation', icon: <TrendingUp className="w-6 h-6"/> },
+      doughMachinability: { label: 'Improved Dough Machinability', icon: <Zap className="w-6 h-6"/> },
+    };
+    const enzymeRecommendations = {
+      quality: {
+        acrylamide: [{ name: 'Acrylaway®', purpose: 'Reduces acrylamide formation for safer products.' }],
+        appearance: [{ name: 'Fungamyl®', purpose: 'Improves loaf volume and enhances crust color.' }],
+        freshness: [{ name: 'Novamyl®', purpose: 'Maintains crumb softness for longer shelf life.' }],
+        wholewheat: [{ name: 'Valena® Wholewheat', purpose: 'Improves dough handling of wholewheat flour.' }],
+        pulses: [{ name: 'Valena® Fiber', purpose: 'Improves texture when incorporating pulse flours.' }],
+      },
+      yield: {
+        fasterFermentation: [{ name: 'Fungamyl®', purpose: 'Enhances fermentation for faster proofing.' }],
+        doughMachinability: [{ name: 'Panzea®', purpose: 'Improves dough extensibility and machine handling.' }],
+      }
+    };
+
+    // --- UI COMPONENTS ---
+    const InputField = ({ label, value, onChange, icon, type = "number" }) => (
+      <div className="flex flex-col">
+        <label className="mb-2 text-sm font-medium text-black flex items-center">
+          {icon}
+          <span className="ml-2">{label}</span>
+        </label>
+        <input
+          type={type}
+          step={type === "number" ? "0.01" : undefined}
+          value={value}
+          onChange={e => {
+            const v = parseFloat(e.target.value);
+            onChange(isNaN(v) ? 0 : v);
+          }}
+          className="bg-brandWhite border-2 border-redSand/50 text-black rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-redClay transition"
+        />
+      </div>
+    );
+
+    const ToggleButton = ({ id, data, selected, onToggle }) => (
+      <div
+        onClick={() => onToggle(id)}
+        className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${selected ? 'bg-redSand border-redClay shadow-lg' : 'bg-brandWhite border-gray-200 hover:border-redSand'}`}
+      >
+        <div className="flex items-center">
+          <div className={`mr-3 text-2xl ${selected ? 'text-redClay' : 'text-gray-600'}`}>{data.icon}</div>
+          <h4 className={`font-semibold ${selected ? 'text-redClay' : 'text-black'}`}>{data.label}</h4>
+        </div>
+      </div>
+    );
+
+    const ResultCard = ({ title, value, unit, icon, isCurrency = false, colorClass = 'redClay' }) => {
+      const n = Number(value) || 0;
+      const f = isCurrency
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+        : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
+
+      // Determine colors based on value for currency cards
+      let bgColor = COLORS.brandWhite;
+      let textColor = COLORS[colorClass];
+      let borderColor = COLORS[colorClass];
+
+      if (isCurrency) {
+        if (n >= 0) {
+          // Positive: mint green background, green text
+          bgColor = COLORS.positiveGreenBg;
+          textColor = COLORS.positiveGreenText;
+          borderColor = COLORS.positiveGreenText;
+        } else {
+          // Negative: light red background, red text
+          bgColor = COLORS.negativeRedBg;
+          textColor = COLORS.negativeRedText;
+          borderColor = COLORS.negativeRedText;
+        }
+      }
+
+      return (
+        <div className={`shadow-lg rounded-2xl p-5 border-l-8`} style={{backgroundColor: bgColor, borderColor: borderColor}}>
+          <div className="flex items-center">
+            <div className="mr-4 text-3xl" style={{color: textColor}}>{icon}</div>
+            <div>
+              <p className="text-sm text-gray-600">{title}</p>
+              <p className="text-3xl font-bold" style={{color: textColor}}>
+                {f} <span className="text-lg font-normal">{unit}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    };
+    
+    const Slider = ({ label, value, onChange, icon, min = 0, max = 100 }) => (
+      <div>
+        <label className="mb-2 text-sm font-medium text-black flex items-center">{icon}<span className="ml-2">{label}</span></label>
+        <div className="flex items-center space-x-4">
+          <span className="text-gray-600 text-sm w-8">{min}%</span>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            value={value}
+            onChange={e => onChange(parseInt(e.target.value) || 0)}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            style={{ 
+              background: `linear-gradient(to right, ${COLORS.redClay} ${value}%, #d1d5db ${value}%)`
+            }}
+          />
+          <span className="text-redClay font-bold w-12 text-center bg-redSand/50 rounded-md py-1">{value}%</span>
+        </div>
+      </div>
+    );
+
+    const ProcessTimeline = ({ base, improved }) => {
+        const totalBaseTime = base.reduce((acc, step) => acc + step.time, 0);
+        const totalImprovedTime = improved.reduce((acc, step) => acc + step.time, 0);
+        const timeSaved = totalBaseTime - totalImprovedTime;
+
+        return (
+            <div className="bg-brandWhite shadow-lg rounded-2xl p-6">
+                <h3 className="text-xl font-bold text-redClay mb-4">Process Timeline Comparison</h3>
+                <div className="space-y-4">
+                    {base.map((step, index) => (
+                        <div key={step.id}>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-medium text-black">{step.name}</span>
+                                <div className="flex items-center space-x-2">
+                                    <span className={`text-sm font-semibold ${improved[index].time < step.time ? 'text-gray-500 line-through' : 'text-black'}`}>{step.time} min</span>
+                                    {improved[index].time < step.time && (
+                                        <>
+                                            <ArrowRight className="w-4 h-4 text-redClay"/>
+                                            <span className="text-sm font-bold text-redClay">{improved[index].time} min</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                <div className="bg-redSand h-2.5 rounded-full" style={{ width: `${(step.time / totalBaseTime) * 100}%` }}></div>
+                            </div>
+                            {improved[index].time < step.time && (
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                                    <div className="bg-redClay h-2.5 rounded-full" style={{ width: `${(improved[index].time / totalBaseTime) * 100}%` }}></div>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-6 pt-4 border-t-2 border-dashed">
+                    <div className="flex justify-between font-bold text-lg">
+                        <span className="text-black">Total Time: {totalBaseTime} min</span>
+                        <span className="text-redClay">New Total: {totalImprovedTime} min</span>
+                    </div>
+                    <p className="text-center mt-2 font-semibold text-redClay">Total Time Saved: {timeSaved} minutes per batch</p>
+                </div>
+            </div>
+        );
+    };
+
+    const EnzymeRecommendation = ({ recommendations, selected, type }) => {
+        const activeRecommendations = Object.keys(selected)
+            .flatMap(key => recommendations[type][key] || [])
+            .filter((v, i, a) => a.findIndex(t => t.name === v.name) === i); // Unique recommendations
+
+        if (activeRecommendations.length === 0) {
+            return (
+                <div className="bg-brandWhite shadow-lg rounded-2xl p-6 text-center">
+                    <FlaskConical className="mx-auto text-gray-400 w-12 h-12 mb-2" />
+                    <h3 className="text-xl font-bold text-redClay mb-2">Enzyme Recommendations</h3>
+                    <p className="text-gray-600">Select an improvement goal to see our enzyme suggestions.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="bg-brandWhite shadow-lg rounded-2xl p-6">
+                <h3 className="text-xl font-bold text-redClay mb-4">Enzyme Recommendations</h3>
+                <div className="space-y-3">
+                    {activeRecommendations.map(rec => (
+                        <div key={rec.name} className="bg-redSand/30 p-3 rounded-lg">
+                            <h4 className="font-bold text-redClay">{rec.name}</h4>
+                            <p className="text-sm text-black">{rec.purpose}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      // State management
+      const [view, setView] = useState('supply'); // 'supply' or 'demand'
+      
+      // Shared inputs
+      const [costPerLoaf, setCostPerLoaf] = useState(0.50);
+      const [revenuePerLoaf, setRevenuePerLoaf] = useState(1.80);
+
+      // Supply chain state
+      const [loavesPerBatch, setLoavesPerBatch] = useState(1000);
+      const [operatingHours, setOperatingHours] = useState(16);
+      const [baseSteps, setBaseSteps] = useState(defaultProcessSteps.map(s => ({ ...s })));
+      const [improvedSteps, setImprovedSteps] = useState(defaultProcessSteps.map(s => ({ ...s })));
+      const [yieldImprovement, setYieldImprovement] = useState(15);
+      const [confidenceFactor, setConfidenceFactor] = useState(80);
+      const [selectedYields, setSelectedYields] = useState({ fasterFermentation: true });
+
+      // Demand creation state
+      const [numStores, setNumStores] = useState(50);
+      const [baseWeeklySales, setBaseWeeklySales] = useState(200);
+      const [freshnessLift, setFreshnessLift] = useState(5);
+      const [wasteReduction, setWasteReduction] = useState(10);
+      const [pricePremium, setPricePremium] = useState(0);
+      const [selectedQualities, setSelectedQualities] = useState({ freshness: true });
+
+      // Effect to update process times when yield improvement changes
+      useEffect(() => {
+        if (view === 'supply') {
+          setImprovedSteps(baseSteps.map(step => {
+            if (step.improvable) {
+              const saved = step.time * (yieldImprovement / 100);
+              return { ...step, time: Math.round(step.time - saved) };
+            }
+            return { ...step };
+          }));
+        }
+      }, [yieldImprovement, baseSteps, view]);
+
+      // Calculations using useMemo for performance
+      const calcs = useMemo(() => {
+        const scenario = (steps) => {
+          const cycle = steps.reduce((a, s) => a + s.time, 0);
+          const batches = cycle > 0 ? Math.floor((operatingHours * 60) / cycle) : 0;
+          const loaves = batches * loavesPerBatch;
+          const profit = loaves * (revenuePerLoaf - costPerLoaf);
+          return { cycle, batches, loaves, profit };
+        };
+
+        const base = scenario(baseSteps);
+        const imp = scenario(improvedSteps);
+
+        // Supply-side gains
+        const loafGain = imp.loaves - base.loaves;
+        const profitGain = imp.profit - base.profit;
+        const adjDailyProfit = profitGain * (confidenceFactor / 100);
+        const adjAnnualProfit = adjDailyProfit * 260; // Assuming 260 operating days/year
+
+        // Demand-side gains
+        const weeklyRevenueLift = (baseWeeklySales * (freshnessLift / 100)) * (revenuePerLoaf * (1 + pricePremium / 100)) * numStores;
+        const weeklyWasteSavings = (baseWeeklySales * (wasteReduction / 100)) * costPerLoaf * numStores;
+        const annualDemandValue = (weeklyRevenueLift + weeklyWasteSavings) * 52;
+
+        return { base, imp, loafGain, adjDailyProfit, adjAnnualProfit, annualDemandValue };
+      }, [baseSteps, improvedSteps, operatingHours, loavesPerBatch, revenuePerLoaf, costPerLoaf, confidenceFactor, baseWeeklySales, freshnessLift, pricePremium, numStores, wasteReduction]);
+
+      const handleToggle = (setter, id) => {
+        setter(prev => {
+          const newState = { ...prev };
+          if (newState[id]) {
+            delete newState[id];
+          } else {
+            newState[id] = true;
+          }
+          return newState;
+        });
+      };
+
+      const ViewToggle = ({ currentView, onViewChange }) => (
+        <div className="flex justify-center p-1 bg-redClay/10 rounded-full">
+          <button onClick={() => onViewChange('supply')} className={`px-6 py-2 rounded-full transition-all duration-300 ${currentView === 'supply' ? 'bg-redClay text-white shadow-md' : 'text-redClay/70 hover:bg-redClay/10'}`}>
+            <div className="flex flex-col items-center leading-tight">
+              <span className="text-base font-semibold">Process Optimisation</span>
+              <i className="text-xs font-normal normal-case">*Supply side economics</i>
+            </div>
+          </button>
+          <button onClick={() => onViewChange('demand')} className={`px-6 py-2 rounded-full transition-all duration-300 ${currentView === 'demand' ? 'bg-redClay text-white shadow-md' : 'text-redClay/70 hover:bg-redClay/10'}`}>
+             <div className="flex flex-col items-center leading-tight">
+              <span className="text-base font-semibold">Customer Value</span>
+              <i className="text-xs font-normal normal-case">*Demand side economics</i>
+            </div>
+          </button>
+        </div>
+      );
+
+      return (
+        <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col min-h-screen">
+          <header className="text-center mb-8">
+            <img src="https://backend.novonesis.com/sites/default/files/image/2024-01/01_Novonesis_Logo_Wordmark_Static_Black_RGB.png" alt="Novonesis Logo" className="h-5 ml-auto mb-4" />
+            <h1 className="text-4xl md:text-5xl font-bold text-redClay">Value potential for Bread line 5 and 7</h1>
+            <p className="text-lg md:text-xl text-black/80 mt-2">Bakery Benefits Calculator</p>
+          </header>
+
+          <main className="flex-grow">
+            <div className="max-w-4xl mx-auto bg-brandWhite/80 backdrop-blur-sm p-6 rounded-2xl shadow-md mb-8">
+              <h2 className="text-2xl font-bold text-redClay mb-4 text-center">Baseline Bakery Economics</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <InputField label="Cost per Loaf ($)" value={costPerLoaf} onChange={setCostPerLoaf} icon={<Minus className="w-5 h-5 text-red-500" />} />
+                <InputField label="Revenue per Loaf ($)" value={revenuePerLoaf} onChange={setRevenuePerLoaf} icon={<Plus className="w-5 h-5 text-green-600" />} />
+              </div>
+            </div>
+
+            <div className="max-w-4xl mx-auto mb-8">
+              <ViewToggle currentView={view} onViewChange={setView} />
+            </div>
+
+            {view === 'supply' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+                {/* --- SUPPLY: LEFT COLUMN (INPUTS) --- */}
+                <div className="space-y-6 bg-brandWhite/80 backdrop-blur-sm p-6 rounded-2xl shadow-md">
+                  <h2 className="text-2xl font-bold text-redClay">Production Inputs</h2>
+                  <InputField label="Loaves per Batch" value={loavesPerBatch} onChange={setLoavesPerBatch} icon={<Package className="w-5 h-5" />} />
+                  <InputField label="Operating Hours per Day" value={operatingHours} onChange={setOperatingHours} icon={<Clock className="w-5 h-5" />} />
+                  
+                  <div className="pt-4 border-t">
+                    <h3 className="text-lg font-semibold text-redClay mb-3">Select Yield Improvements</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {Object.entries(yieldImprovementsData).map(([key, data]) => (
+                        <ToggleButton key={key} id={key} data={data} selected={!!selectedYields[key]} onToggle={() => handleToggle(setSelectedYields, key)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t space-y-4">
+                     <Slider label="Process Time Reduction" value={yieldImprovement} onChange={setYieldImprovement} icon={<TrendingUp className="w-5 h-5" />} />
+                     <Slider label="Confidence Factor" value={confidenceFactor} onChange={setConfidenceFactor} icon={<Award className="w-5 h-5" />} />
+                  </div>
+                </div>
+
+                {/* --- SUPPLY: RIGHT COLUMN (OUTPUTS) --- */}
+                <div className="space-y-6">
+                  <div className="bg-brandWhite shadow-lg rounded-2xl p-6">
+                    <h2 className="text-2xl font-bold text-redClay mb-4">Potential Gains (Process Optimisation)</h2>
+                    <div className="space-y-4">
+                      <ResultCard title="Adjusted Annual Profit Increase" value={calcs.adjAnnualProfit} unit="/ year" icon={<DollarSign />} isCurrency={true} />
+                      <ResultCard title="Additional Loaves Produced" value={calcs.loafGain * 260} unit="/ year" icon={<Package />} colorClass="redSand" />
+                      <ResultCard title="Additional Batches" value={(calcs.imp.batches - calcs.base.batches) * 260} unit="/ year" icon={<Repeat />} colorClass="redSand" />
+                    </div>
+                  </div>
+                  <ProcessTimeline base={baseSteps} improved={improvedSteps} />
+                  <EnzymeRecommendation recommendations={enzymeRecommendations} selected={selectedYields} type="yield" />
+                </div>
+              </div>
+            )}
+
+            {view === 'demand' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+                {/* --- DEMAND: LEFT COLUMN (INPUTS) --- */}
+                <div className="space-y-6 bg-brandWhite/80 backdrop-blur-sm p-6 rounded-2xl shadow-md">
+                  <h2 className="text-2xl font-bold text-redClay">Market Inputs</h2>
+                  <InputField label="Number of Stores" value={numStores} onChange={setNumStores} icon={<Store className="w-5 h-5" />} />
+                  <InputField label="Weekly Sales per Store (Loaves)" value={baseWeeklySales} onChange={setBaseWeeklySales} icon={<ShoppingCart className="w-5 h-5" />} />
+
+                  <div className="pt-4 border-t">
+                    <h3 className="text-lg font-semibold text-redClay mb-3">Select Quality Improvements</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {Object.entries(qualityImprovementsData).map(([key, data]) => (
+                        <ToggleButton key={key} id={key} data={data} selected={!!selectedQualities[key]} onToggle={() => handleToggle(setSelectedQualities, key)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t space-y-4">
+                     <Slider label="Sales Lift from Freshness" value={freshnessLift} onChange={setFreshnessLift} icon={<TrendingUp className="w-5 h-5" />} max={50} />
+                     <Slider label="Waste Reduction at Store" value={wasteReduction} onChange={setWasteReduction} icon={<ShieldCheck className="w-5 h-5" />} max={50} />
+                     <Slider label="Price Premium for Quality" value={pricePremium} onChange={setPricePremium} icon={<Percent className="w-5 h-5" />} max={50} />
+                  </div>
+                </div>
+
+                {/* --- DEMAND: RIGHT COLUMN (OUTPUTS) --- */}
+                <div className="space-y-6">
+                   <div className="bg-brandWhite shadow-lg rounded-2xl p-6">
+                    <h2 className="text-2xl font-bold text-redClay mb-4">Potential Gains (Customer Value)</h2>
+                    <div className="space-y-4">
+                      <ResultCard title="Annual Value Creation" value={calcs.annualDemandValue} unit="/ year" icon={<DollarSign />} isCurrency={true} />
+                      <p className="text-sm text-center text-gray-600 pt-2">This value combines increased revenue from sales lift and cost savings from waste reduction.</p>
+                    </div>
+                  </div>
+                  <EnzymeRecommendation recommendations={enzymeRecommendations} selected={selectedQualities} type="quality" />
+                </div>
+              </div>
+            )}
+          </main>
+          <footer className="text-center p-8 mt-auto border-t border-redClay/20">
+            <img src="https://backend.novonesis.com/sites/default/files/image/2024-01/01_Novonesis_Logo_Wordmark_Static_Black_RGB.png" alt="Novonesis Logo" className="h-4 ml-auto" />
+          </footer>
+        </div>
+      );
+    }
+
+    // Render the app
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.5s ease-out forwards;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: transparent;
+      border-radius: 5px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #B7410E; /* redClay */
+      cursor: pointer;
+      border-radius: 50%;
+      border: 2px solid #FCF8F3; /* brandWhite */
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #B7410E; /* redClay */
+      cursor: pointer;
+      border-radius: 50%;
+      border: 2px solid #FCF8F3; /* brandWhite */
+    }
+  </style>
+</body>
+</html>
